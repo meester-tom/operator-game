@@ -349,7 +349,7 @@ const SLOT = () => `<span class="op op-slot">?</span>`;
 const rInt = (a,b) => Math.floor(Math.random()*(b-a+1))+a;
 
 function varCtx(a,b){
-  return `${VAR('$a')} ${OP('=')} ${typeof a==='boolean'?BOOL(a):NUM(a)}${span('res',';')}<br><span style="display:inline-block;height:0.2em"></span><br>${VAR('$b')} ${OP('=')} ${typeof b==='boolean'?BOOL(b):NUM(b)}${span('res',';')}`;
+  return `<div>${VAR('$a')} ${OP('=')} ${typeof a==='boolean'?BOOL(a):NUM(a)}${span('res',';')}</div><div style="height:0.4em"></div><div>${VAR('$b')} ${OP('=')} ${typeof b==='boolean'?BOOL(b):NUM(b)}${span('res',';')}</div>`;
 }
 
 // ─── Question generators ──────────────────────────────────────────────────────
