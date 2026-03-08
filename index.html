@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PHP Operators — Classroom Game</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700;800&family=Share+Tech+Mono&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:  #00ff88;
+    --red:    #ff3c5a;
+    --blue:   #3cf0ff;
+    --yellow: #ffe94d;
+    --orange: #ff9f3c;
+    --purple: #c084fc;
+    --bg:     #080810;
+  }
+
+  body {
+    background: var(--bg);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px);
+    pointer-events: none; z-index: 200;
+  }
+
+  .grid-bg {
+    position: fixed; inset: 0;
+    background-image: radial-gradient(rgba(60,240,255,0.06) 1px, transparent 1px);
+    background-size: 32px 32px; pointer-events: none;
+  }
+
+  .corner {
+    position: fixed; width: 50px; height: 50px;
+    border-color: rgba(60,240,255,0.2); border-style: solid; border-width: 0;
+  }
+  .corner.tl { top:18px; left:18px;   border-top-width:2px; border-left-width:2px; }
+  .corner.tr { top:18px; right:18px;  border-top-width:2px; border-right-width:2px; }
+  .corner.bl { bottom:18px; left:18px;  border-bottom-width:2px; border-left-width:2px; }
+  .corner.br { bottom:18px; right:18px; border-bottom-width:2px; border-right-width:2px; }
+
+  /* ── HUD ── */
+  .hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 28px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; letter-spacing: 0.18em;
+    z-index: 50;
+  }
+  .hud-left   { display: flex; gap: 20px; align-items: center; }
+  .hud-center { display: flex; gap: 6px; align-items: center; }
+  .hud-right  { display: flex; gap: 20px; align-items: center; }
+
+  .hud-q      { color: rgba(60,240,255,0.5); }
+  .hud-score  { color: var(--yellow); }
+  .hud-level  { color: var(--purple); }
+
+  .heart { font-size: 16px; transition: all 0.3s; }
+  .heart.lost { opacity: 0.15; filter: grayscale(1); transform: scale(0.8); }
+
+  .hud-streak {
+    color: var(--orange); font-size: 13px;
+    transition: all 0.3s; min-width: 50px; text-align: right;
+  }
+  .hud-streak.pop { animation: streakPop 0.5s ease-out; }
+  @keyframes streakPop { 0%{transform:scale(1.5)} 100%{transform:scale(1)} }
+
+  /* Level-up banner */
+  #level-banner {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    z-index: 300; text-align: center; opacity: 0; pointer-events: none;
+  }
+  #level-banner.show { animation: levelBang 1.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+  @keyframes levelBang {
+    0%   { opacity:0; transform:translate(-50%,-50%) scale(0.5); filter:blur(10px); }
+    25%  { opacity:1; transform:translate(-50%,-50%) scale(1.06); filter:blur(0); }
+    70%  { opacity:1; transform:translate(-50%,-50%) scale(1); }
+    100% { opacity:0; transform:translate(-50%,-50%) scale(1); }
+  }
+  .lv-title {
+    font-size: clamp(36px,9vw,80px); font-weight:800;
+    color: var(--purple); letter-spacing:-0.02em;
+    text-shadow: 0 0 50px rgba(192,132,252,0.7);
+  }
+  .lv-sub {
+    font-family:'Share Tech Mono',monospace; font-size:13px;
+    letter-spacing:0.3em; color:rgba(255,255,255,0.4); margin-top:6px;
+  }
+
+  /* Progress bar */
+  .progress-bar {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    width: 280px; height: 2px; background: rgba(255,255,255,0.05);
+    border-radius: 2px; overflow: hidden; opacity: 0; transition: opacity 0.4s;
+  }
+  .progress-bar.visible { opacity: 1; }
+  .progress-fill { height:100%; background:var(--blue); width:0%; box-shadow:0 0 8px var(--blue); }
+
+  /* ── Phases ── */
+  .phase { display:none; flex-direction:column; align-items:center; position:relative; z-index:10; }
+  .phase.active { display:flex; }
+
+  /* ── QUESTION ── */
+  #q-context {
+    font-family:'JetBrains Mono',monospace;
+    font-size:clamp(18px,3.8vw,44px); font-weight:700; letter-spacing:-0.01em;
+    color:rgba(255,255,255,0.55); margin-bottom:36px; min-height:1em;
+    text-align:center; white-space:nowrap;
+  }
+  #q-expression {
+    font-size:clamp(26px,5.5vw,60px); font-weight:800;
+    letter-spacing:-0.01em; line-height:1.15; text-align:center; white-space:nowrap;
+  }
+
+  .op-slot {
+    display:inline-block; min-width:1.6em; text-align:center;
+    border:2px solid var(--yellow); border-radius:4px; padding:2px 10px;
+    color:rgba(255,233,77,0.3); box-shadow:0 0 12px rgba(255,233,77,0.15);
+    animation:slotPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes slotPulse {
+    0%,100%{box-shadow:0 0 10px rgba(255,233,77,0.15);border-color:rgba(255,233,77,0.5)}
+    50%    {box-shadow:0 0 22px rgba(255,233,77,0.4);border-color:var(--yellow)}
+  }
+
+  .kw{color:#ff79c6} .var{color:var(--blue)} .op{color:var(--yellow)}
+  .num{color:var(--orange)} .bl{color:var(--green)} .bf{color:var(--red)}
+  .res{color:rgba(255,255,255,0.45);font-size:0.75em}
+
+  .answer-row { display:flex; flex-wrap:wrap; justify-content:center; gap:16px; margin-top:44px; }
+  .ans-btn {
+    font-family:'JetBrains Mono',monospace; font-weight:800;
+    font-size:clamp(16px,3vw,26px); padding:14px 36px;
+    border:2px solid; border-radius:4px; background:transparent; cursor:pointer;
+    letter-spacing:0.04em; transition:all 0.18s; position:relative; overflow:hidden;
+  }
+  .ans-btn::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity 0.18s}
+  .ans-btn:hover::before{opacity:1} .ans-btn:active{transform:scale(0.95)}
+
+  .btn-true{color:var(--green);border-color:var(--green)}
+  .btn-true::before{background:rgba(0,255,136,0.07)}
+  .btn-true:hover{box-shadow:0 0 28px rgba(0,255,136,0.3)}
+  .btn-false{color:var(--red);border-color:var(--red)}
+  .btn-false::before{background:rgba(255,60,90,0.07)}
+  .btn-false:hover{box-shadow:0 0 28px rgba(255,60,90,0.3)}
+  .btn-op{color:var(--yellow);border-color:rgba(255,233,77,0.4);font-size:clamp(14px,2.5vw,22px);padding:12px 24px}
+  .btn-op::before{background:rgba(255,233,77,0.06)}
+  .btn-op:hover{border-color:var(--yellow);box-shadow:0 0 24px rgba(255,233,77,0.25)}
+
+  /* ── FEEDBACK ── */
+  #fb-icon{font-size:clamp(52px,12vw,96px);line-height:1;animation:popIn 0.4s cubic-bezier(0.16,1,0.3,1) forwards}
+  @keyframes popIn{from{opacity:0;transform:scale(0.4)}to{opacity:1;transform:scale(1)}}
+  #fb-label{margin-top:16px;font-size:clamp(11px,2vw,14px);letter-spacing:0.25em;text-transform:uppercase;font-family:'Share Tech Mono',monospace}
+  .fb-correct{color:var(--green)} .fb-wrong{color:var(--red)}
+  #fb-expression{margin-top:24px;font-size:clamp(18px,3.5vw,38px);font-weight:700;text-align:center}
+  #fb-explanation{margin-top:14px;font-size:clamp(11px,1.8vw,14px);color:rgba(255,255,255,0.3);letter-spacing:0.08em;font-family:'Share Tech Mono',monospace;text-align:center;max-width:500px}
+
+  /* Flash + shake */
+  #flash{position:fixed;inset:0;pointer-events:none;z-index:150;opacity:0}
+  #flash.correct{background:rgba(0,255,136,0.08);animation:flash 0.4s ease-out}
+  #flash.wrong  {background:rgba(255,60,90,0.12); animation:flash 0.4s ease-out}
+  @keyframes flash{0%{opacity:1}100%{opacity:0}}
+  @keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+  .shake{animation:shake 0.4s ease-out}
+
+  /* Confetti */
+  #confetti{position:fixed;inset:0;pointer-events:none;z-index:140}
+
+  /* ── END ── */
+  #end-score{font-size:clamp(60px,14vw,120px);font-weight:800;letter-spacing:-0.04em;line-height:1;animation:revealFinal 0.7s cubic-bezier(0.16,1,0.3,1) forwards}
+  @keyframes revealFinal{from{opacity:0;transform:scale(0.6);filter:blur(16px)}to{opacity:1;transform:scale(1);filter:blur(0)}}
+  #end-label{font-family:'Share Tech Mono',monospace;font-size:12px;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.2);margin-bottom:12px}
+  #end-verdict{margin-top:12px;font-family:'Share Tech Mono',monospace;font-size:14px;letter-spacing:0.2em;color:rgba(255,255,255,0.35)}
+
+  /* High score table */
+  #end-scores{margin-top:28px;width:300px;border:1px solid rgba(255,255,255,0.08);border-radius:6px;overflow:hidden}
+  .hs-header{background:rgba(255,255,255,0.04);padding:8px 16px;font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.25);display:flex;justify-content:space-between}
+  .hs-row{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-top:1px solid rgba(255,255,255,0.05);font-family:'Share Tech Mono',monospace;font-size:13px}
+  .hs-row.new-entry{background:rgba(255,233,77,0.07)}
+  .hs-rank{color:rgba(255,255,255,0.2);width:22px}
+  .hs-name{color:rgba(255,255,255,0.65);flex:1;padding:0 10px}
+  .hs-pts{color:var(--yellow)}
+  .hs-row.rank-1 .hs-pts{color:#ffd700}
+  .hs-row.rank-2 .hs-pts{color:#c0c0c0}
+  .hs-row.rank-3 .hs-pts{color:#cd7f32}
+
+  #name-entry{display:flex;gap:10px;margin-top:20px;align-items:center}
+  #name-input{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;background:transparent;border:none;border-bottom:2px solid rgba(255,255,255,0.25);color:#fff;outline:none;width:150px;padding:4px 2px;letter-spacing:0.05em;text-transform:uppercase}
+  #name-input::placeholder{color:rgba(255,255,255,0.2)}
+  #name-input:focus{border-bottom-color:var(--yellow)}
+  #save-score-btn{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;padding:8px 18px;border:1px solid rgba(255,233,77,0.4);background:transparent;color:var(--yellow);cursor:pointer;border-radius:3px;letter-spacing:0.15em;text-transform:uppercase;transition:all 0.2s}
+  #save-score-btn:hover{background:rgba(255,233,77,0.08);border-color:var(--yellow)}
+
+  .play-again{margin-top:20px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;padding:12px 32px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:rgba(255,255,255,0.35);cursor:pointer;letter-spacing:0.2em;text-transform:uppercase;border-radius:3px;transition:all 0.25s}
+  .play-again:hover{color:#fff;border-color:rgba(255,255,255,0.4);background:rgba(255,255,255,0.04)}
+
+  /* Game over */
+  #gameover{position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:250;gap:14px}
+  #gameover.show{display:flex;animation:fadeIn 0.5s ease forwards}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .go-title{font-size:clamp(40px,10vw,80px);font-weight:800;color:var(--red);text-shadow:0 0 40px rgba(255,60,90,0.5);letter-spacing:-0.02em}
+  .go-sub{font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:0.25em;color:rgba(255,255,255,0.3);text-transform:uppercase}
+
+  @keyframes slideIn{from{opacity:0;transform:translateY(20px);filter:blur(4px)}to{opacity:1;transform:translateY(0);filter:blur(0)}}
+  .anim-in{animation:slideIn 0.42s cubic-bezier(0.16,1,0.3,1) forwards}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="corner tl"></div><div class="corner tr"></div>
+<div class="corner bl"></div><div class="corner br"></div>
+<canvas id="confetti"></canvas>
+<div id="flash"></div>
+
+<div id="level-banner">
+  <div class="lv-title" id="lv-title"></div>
+  <div class="lv-sub"   id="lv-sub"></div>
+</div>
+
+<!-- HUD -->
+<div class="hud">
+  <div class="hud-left">
+    <span class="hud-q"    id="hudQ">Q 1 / 10</span>
+    <span class="hud-level" id="hudLevel">LEVEL 1</span>
+  </div>
+  <div class="hud-center" id="hudHearts"></div>
+  <div class="hud-right">
+    <span class="hud-streak" id="hudStreak"></span>
+    <span class="hud-score"  id="hudScore">0 pts</span>
+  </div>
+</div>
+
+<!-- Question -->
+<div class="phase" id="phase-question">
+  <div id="q-context"></div>
+  <div id="q-expression"></div>
+  <div class="answer-row" id="answer-row"></div>
+</div>
+
+<!-- Feedback -->
+<div class="phase" id="phase-feedback">
+  <div id="fb-icon"></div>
+  <div id="fb-label"></div>
+  <div id="fb-expression"></div>
+  <div id="fb-explanation"></div>
+</div>
+
+<!-- End -->
+<div class="phase" id="phase-end">
+  <div id="end-label">final score</div>
+  <div id="end-score"></div>
+  <div id="end-verdict"></div>
+  <div id="name-entry">
+    <input id="name-input" maxlength="10" placeholder="YOUR NAME" autocomplete="off" />
+    <button id="save-score-btn" onclick="saveScore()">SAVE</button>
+  </div>
+  <div id="end-scores"></div>
+  <button class="play-again" onclick="startGame()">▶ play again</button>
+</div>
+
+<!-- Game Over -->
+<div id="gameover">
+  <div class="go-title">GAME OVER</div>
+  <div class="go-sub" id="go-sub"></div>
+  <button class="play-again" style="margin-top:24px" onclick="startGame()">▶ try again</button>
+</div>
+
+<div class="progress-bar" id="progressBar">
+  <div class="progress-fill" id="progressFill"></div>
+</div>
+
+<script>
+// ─── Audio ────────────────────────────────────────────────────────────────────
+const AC = new (window.AudioContext || window.webkitAudioContext)();
+document.addEventListener('click', () => { if (AC.state==='suspended') AC.resume(); }, {once:true});
+
+function tone(type, freq, dur, vol=0.16, delay=0) {
+  try {
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.connect(g); g.connect(AC.destination);
+    o.type=type; o.frequency.value=freq;
+    const t=AC.currentTime+delay;
+    g.gain.setValueAtTime(vol,t);
+    g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+    o.start(t); o.stop(t+dur);
+  } catch(e){}
+}
+const sfxCorrect = () => { tone('sine',523,0.08,0.14); tone('sine',659,0.08,0.14,0.08); tone('sine',784,0.14,0.16,0.16); };
+const sfxWrong   = () => { tone('sawtooth',220,0.12,0.15); tone('sawtooth',170,0.18,0.13,0.11); };
+const sfxStreak  = () => [523,659,784,1047].forEach((f,i)=>tone('sine',f,0.12,0.2,i*0.06));
+const sfxLevelUp = () => [392,494,587,784,987].forEach((f,i)=>tone('triangle',f,0.15,0.22,i*0.07));
+const sfxGameOver= () => [300,250,200,150].forEach((f,i)=>tone('sawtooth',f,0.22,0.2,i*0.1));
+
+// ─── Confetti ─────────────────────────────────────────────────────────────────
+const cnv=document.getElementById('confetti'), c2=cnv.getContext('2d');
+let parts=[], confettiRunning=false;
+function resizeCnv(){cnv.width=innerWidth;cnv.height=innerHeight;}
+resizeCnv(); window.addEventListener('resize',resizeCnv);
+
+function spawnConfetti(n=90){
+  const cols=['#00ff88','#3cf0ff','#ffe94d','#ff9f3c','#c084fc','#ff79c6','#fff'];
+  for(let i=0;i<n;i++) parts.push({
+    x:Math.random()*innerWidth, y:-10,
+    vx:(Math.random()-0.5)*5, vy:Math.random()*4+1.5,
+    col:cols[Math.floor(Math.random()*cols.length)],
+    w:Math.random()*7+3, h:Math.random()*5+3,
+    rot:Math.random()*360, rv:(Math.random()-0.5)*9, life:1
+  });
+  if(!confettiRunning){confettiRunning=true;animConfetti();}
+}
+function animConfetti(){
+  c2.clearRect(0,0,cnv.width,cnv.height);
+  parts=parts.filter(p=>p.life>0&&p.y<cnv.height+20);
+  parts.forEach(p=>{
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.07; p.rot+=p.rv; p.life-=0.013;
+    c2.save(); c2.translate(p.x,p.y); c2.rotate(p.rot*Math.PI/180);
+    c2.globalAlpha=Math.max(0,p.life); c2.fillStyle=p.col;
+    c2.fillRect(-p.w/2,-p.h/2,p.w,p.h); c2.restore();
+  });
+  if(parts.length){requestAnimationFrame(animConfetti);}else{confettiRunning=false;}
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const span   = (cls,txt) => `<span class="${cls}">${txt}</span>`;
+const shuffle = a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;};
+const VAR  = s => span('var',s);
+const OP   = s => span('op',s);
+const NUM  = n => span('num',n);
+const BOOL = b => b ? span('bl','true') : span('bf','false');
+const SLOT = () => `<span class="op op-slot">?</span>`;
+const rInt = (a,b) => Math.floor(Math.random()*(b-a+1))+a;
+
+function varCtx(a,b){
+  return `${VAR('$a')} ${OP('=')} ${typeof a==='boolean'?BOOL(a):NUM(a)}${span('res',';')}&nbsp;&nbsp;&nbsp;${VAR('$b')} ${OP('=')} ${typeof b==='boolean'?BOOL(b):NUM(b)}${span('res',';')}`;
+}
+
+// ─── Question generators ──────────────────────────────────────────────────────
+function q_or_tf(){
+  const [a,b]=shuffle([[true,false],[false,false],[true,true],[false,true]])[0];
+  return{mode:'tf',ctx:varCtx(a,b),expr:`${VAR('$a')} ${OP('||')} ${VAR('$b')}`,ans:a||b,expl:`${a} || ${b} → ${a||b}`};
+}
+function q_or_op(){
+  const [a,b]=shuffle([[true,false],[false,false],[true,true],[false,true]])[0],res=a||b;
+  return{mode:'op',ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`,correctOp:'||',ans:res,expl:`${a} || ${b} → ${res}`};
+}
+function q_and_tf(){
+  const [a,b]=shuffle([[true,true],[true,false],[false,false],[false,true]])[0];
+  return{mode:'tf',ctx:varCtx(a,b),expr:`${VAR('$a')} ${OP('&&')} ${VAR('$b')}`,ans:!!(a&&b),expl:`${a} && ${b} → ${!!(a&&b)}`};
+}
+function q_and_op(){
+  const [a,b]=shuffle([[true,true],[true,false],[false,false],[false,true]])[0],res=!!(a&&b);
+  return{mode:'op',ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`,correctOp:'&&',ans:res,expl:`${a} && ${b} → ${res}`};
+}
+function q_gte_tf(){const a=rInt(1,9),b=rInt(1,9);return{mode:'tf',ctx:varCtx(a,b),expr:`${VAR('$a')} ${OP('>=')} ${VAR('$b')}`,ans:a>=b,expl:`${a} >= ${b} → ${a>=b}`};}
+function q_gte_op(){const a=rInt(1,9),b=rInt(1,9),r=a>=b;return{mode:'op',ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'>=',ans:r,expl:`${a} >= ${b} → ${r}`};}
+function q_lte_tf(){const a=rInt(1,9),b=rInt(1,9);return{mode:'tf',ctx:varCtx(a,b),expr:`${VAR('$a')} ${OP('<=')} ${VAR('$b')}`,ans:a<=b,expl:`${a} <= ${b} → ${a<=b}`};}
+function q_lte_op(){const a=rInt(1,9),b=rInt(1,9),r=a<=b;return{mode:'op',ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'<=',ans:r,expl:`${a} <= ${b} → ${r}`};}
+function q_eq_tf(){
+  const pick=Math.random()<0.5;
+  const a=rInt(1,9),b=pick?a:(()=>{let x;do{x=rInt(1,9);}while(x===a);return x;})();
+  return{mode:'tf',ctx:varCtx(a,b),expr:`${VAR('$a')} ${OP('==')} ${VAR('$b')}`,ans:a==b,expl:`${a} == ${b} → ${a==b}`};
+}
+function q_eq_op(){const a=rInt(1,9),b=rInt(1,9),r=a==b;return{mode:'op',ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'==',ans:r,expl:`${a} == ${b} → ${r}`};}
+function q_not_tf(){const a=Math.random()<0.5;return{mode:'tf',ctx:`${VAR('$a')} ${OP('=')} ${BOOL(a)}${span('res',';')}`,expr:`${OP('!')}${VAR('$a')}`,ans:!a,expl:`!${a} → ${!a}`};}
+function q_not_op(){const a=Math.random()<0.5,r=!a;return{mode:'op',ctx:`${VAR('$a')} ${OP('=')} ${BOOL(a)}${span('res',';')}`,expr:`${SLOT()}${VAR('$a')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'!',ans:r,expl:`!${a} → ${r}`};}
+
+const OPERATORS=['||','&&','>=','<=','==','!'];
+const TOTAL_Q=10, MAX_LIVES=3;
+
+// ─── Levels ───────────────────────────────────────────────────────────────────
+const LEVELS=[
+  {min:0,   name:'LEVEL 1',sub:'Beginner'},
+  {min:35,  name:'LEVEL 2',sub:'Getting there'},
+  {min:75,  name:'LEVEL 3',sub:'Intermediate'},
+  {min:120, name:'LEVEL 4',sub:'Advanced'},
+  {min:160, name:'LEVEL 5',sub:'PHP Master 🏆'},
+];
+function getLevel(pts){let l=LEVELS[0];for(const x of LEVELS)if(pts>=x.min)l=x;return l;}
+
+// ─── High scores ──────────────────────────────────────────────────────────────
+let highScores=[], pendingScore=null;
+
+function saveScore(){
+  const name=(document.getElementById('name-input').value.trim().toUpperCase()||'ANON').slice(0,10);
+  if(pendingScore===null)return;
+  highScores.push({name,score:pendingScore});
+  highScores.sort((a,b)=>b.score-a.score);
+  highScores=highScores.slice(0,8);
+  pendingScore=null;
+  document.getElementById('name-entry').style.display='none';
+  renderScoreTable(name);
+}
+
+function renderScoreTable(newName){
+  const el=document.getElementById('end-scores');
+  if(!highScores.length){el.innerHTML='';return;}
+  let firstMatch=true;
+  el.innerHTML=`<div class="hs-header"><span>RANK</span><span>NAME</span><span>PTS</span></div>`
+    +highScores.map((s,i)=>{
+      let isNew=false;
+      if(s.name===newName&&firstMatch){isNew=true;firstMatch=false;}
+      return`<div class="hs-row rank-${i+1}${isNew?' new-entry':''}"><span class="hs-rank">${i+1}</span><span class="hs-name">${s.name}</span><span class="hs-pts">${s.score}</span></div>`;
+    }).join('');
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let questions=[],qIndex=0,score=0,streak=0,lives=MAX_LIVES,fbTimer=null,prevLevelName='';
+
+function buildPool(){
+  return shuffle([q_or_tf(),q_or_op(),q_and_tf(),q_and_op(),q_gte_tf(),q_gte_op(),q_lte_tf(),q_lte_op(),q_eq_tf(),q_eq_op(),q_not_tf(),q_not_op()]).slice(0,TOTAL_Q);
+}
+function getOpChoices(op){return shuffle([op,...shuffle(OPERATORS.filter(o=>o!==op)).slice(0,3)]);}
+
+// ─── DOM ──────────────────────────────────────────────────────────────────────
+const $=id=>document.getElementById(id);
+const phaseQ=$('phase-question'),phaseFB=$('phase-feedback'),phaseEnd=$('phase-end');
+
+function showPhase(n){
+  [phaseQ,phaseFB,phaseEnd].forEach(p=>p.classList.remove('active'));
+  $('phase-'+n).classList.add('active');
+}
+
+function updateHUD(){
+  $('hudQ').textContent=`Q ${Math.min(qIndex+1,TOTAL_Q)} / ${TOTAL_Q}`;
+  $('hudScore').textContent=`${score} pts`;
+  const lv=getLevel(score);
+  $('hudLevel').textContent=lv.name;
+
+  // Level up?
+  if(lv.name!==prevLevelName&&prevLevelName!==''){
+    $('lv-title').textContent=lv.name;
+    $('lv-sub').textContent=lv.sub;
+    const b=$('level-banner');
+    b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    sfxLevelUp();
+  }
+  prevLevelName=lv.name;
+
+  // Hearts
+  const hh=$('hudHearts'); hh.innerHTML='';
+  for(let i=0;i<MAX_LIVES;i++){
+    const s=document.createElement('span');
+    s.className='heart'+(i>=lives?' lost':'');
+    s.textContent='❤️'; hh.appendChild(s);
+  }
+
+  // Streak
+  const ss=$('hudStreak');
+  if(streak>=2){ss.textContent=`🔥 ${streak}`;ss.classList.add('pop');setTimeout(()=>ss.classList.remove('pop'),500);}
+  else ss.textContent='';
+}
+
+function startProgressBar(){
+  const pb=$('progressBar'),pf=$('progressFill');
+  pb.classList.add('visible'); pf.style.transition='none'; pf.style.width='0%';
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{pf.style.transition='width 15000ms linear';pf.style.width='100%';}));
+}
+
+// ─── Render ───────────────────────────────────────────────────────────────────
+function renderQuestion(){
+  const q=questions[qIndex]; updateHUD();
+  $('q-context').innerHTML=q.ctx||'';
+  const qe=$('q-expression'); qe.innerHTML=q.expr;
+  qe.classList.remove('anim-in'); void qe.offsetWidth; qe.classList.add('anim-in');
+  const ar=$('answer-row'); ar.innerHTML='';
+  if(q.mode==='tf'){
+    ['true','false'].forEach(v=>{
+      const b=document.createElement('button');
+      b.className=`ans-btn btn-${v}`; b.textContent=v;
+      b.onclick=()=>submitAnswer(v==='true',q); ar.appendChild(b);
+    });
+  } else {
+    getOpChoices(q.correctOp).forEach(op=>{
+      const b=document.createElement('button');
+      b.className='ans-btn btn-op'; b.textContent=op;
+      b.onclick=()=>submitAnswer(op,q); ar.appendChild(b);
+    });
+  }
+  showPhase('question'); startProgressBar();
+}
+
+// ─── Answer ───────────────────────────────────────────────────────────────────
+function submitAnswer(given,q){
+  clearTimeout(fbTimer); $('progressBar').classList.remove('visible');
+  const correct=q.mode==='tf'?given===q.ans:given===q.correctOp;
+
+  if(correct){
+    const bonus=streak>=4?15:streak>=2?12:10;
+    score+=bonus; streak++;
+    if(streak===3)sfxStreak(); else sfxCorrect();
+    const f=$('flash'); f.className=''; void f.offsetWidth; f.className='correct';
+    if(streak>=3)spawnConfetti(60);
+  } else {
+    lives--; streak=0; sfxWrong();
+    const f=$('flash'); f.className=''; void f.offsetWidth; f.className='wrong';
+    phaseQ.classList.add('shake'); setTimeout(()=>phaseQ.classList.remove('shake'),400);
+  }
+  updateHUD();
+
+  const revealed=q.expr.replace(/<span class="op op-slot">.*?<\/span>/,`<span class="op">${q.correctOp||''}</span>`);
+  $('fb-icon').textContent=correct?'✓':'✗';
+  $('fb-icon').className=correct?'fb-correct':'fb-wrong';
+  $('fb-label').textContent=correct?'correct':'wrong';
+  $('fb-label').className=correct?'fb-correct':'fb-wrong';
+  $('fb-expression').innerHTML=revealed;
+  $('fb-explanation').textContent=q.expl;
+  showPhase('feedback');
+
+  fbTimer=setTimeout(()=>{
+    if(lives<=0){triggerGameOver();return;}
+    qIndex++; if(qIndex>=TOTAL_Q)showEnd(); else renderQuestion();
+  },2400);
+}
+
+function triggerGameOver(){
+  sfxGameOver();
+  $('go-sub').textContent=`you scored ${score} point${score!==1?'s':''}`;
+  $('gameover').classList.add('show');
+}
+
+// ─── End ──────────────────────────────────────────────────────────────────────
+function showEnd(){
+  $('progressBar').classList.remove('visible');
+  const lv=getLevel(score);
+  const es=$('end-score');
+  es.textContent=`${score} pts`;
+  es.style.color=score>=120?'var(--green)':score>=70?'var(--yellow)':'var(--red)';
+  $('end-verdict').textContent=lv.sub;
+  if(score>=70)spawnConfetti(120);
+  pendingScore=score;
+  $('name-entry').style.display='flex';
+  $('name-input').value='';
+  renderScoreTable(null);
+  showPhase('end');
+}
+
+// ─── Start ────────────────────────────────────────────────────────────────────
+function startGame(){
+  clearTimeout(fbTimer);
+  $('gameover').classList.remove('show');
+  questions=buildPool(); qIndex=0; score=0; streak=0; lives=MAX_LIVES; prevLevelName='';
+  renderQuestion();
+}
+
+startGame();
+</script>
+</body>
+</html>

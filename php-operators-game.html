@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PHP Operators — Classroom Game</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700;800&family=Share+Tech+Mono&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green:  #00ff88;
+    --red:    #ff3c5a;
+    --blue:   #3cf0ff;
+    --yellow: #ffe94d;
+    --orange: #ff9f3c;
+    --bg:     #080810;
+    --dim:    rgba(255,255,255,0.08);
+  }
+
+  body {
+    background: var(--bg);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  /* Scanlines */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.06) 2px, rgba(0,0,0,0.06) 4px);
+    pointer-events: none; z-index: 200;
+  }
+
+  /* Dot grid */
+  .grid-bg {
+    position: fixed; inset: 0;
+    background-image: radial-gradient(rgba(60,240,255,0.07) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+  }
+
+  /* Corners */
+  .corner {
+    position: fixed; width: 50px; height: 50px;
+    border-color: rgba(60,240,255,0.25); border-style: solid; border-width: 0;
+  }
+  .corner.tl { top:18px; left:18px;  border-top-width:2px; border-left-width:2px; }
+  .corner.tr { top:18px; right:18px; border-top-width:2px; border-right-width:2px; }
+  .corner.bl { bottom:18px; left:18px;  border-bottom-width:2px; border-left-width:2px; }
+  .corner.br { bottom:18px; right:18px; border-bottom-width:2px; border-right-width:2px; }
+
+  /* Score + counter */
+  .hud {
+    position: fixed; top: 22px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 32px; align-items: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px; letter-spacing: 0.25em;
+    color: rgba(255,255,255,0.25);
+  }
+  .hud-score { color: var(--yellow); }
+  .hud-q     { color: rgba(60,240,255,0.5); }
+
+  /* Progress bar */
+  .progress-bar {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    width: 280px; height: 2px;
+    background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden;
+    opacity: 0; transition: opacity 0.4s;
+  }
+  .progress-bar.visible { opacity: 1; }
+  .progress-fill {
+    height: 100%; background: var(--blue); width: 0%;
+    box-shadow: 0 0 8px var(--blue);
+  }
+
+  /* ── Phases ─────────────────────────────────────────── */
+  .phase { display: none; flex-direction: column; align-items: center; gap: 0; position: relative; z-index: 10; }
+  .phase.active { display: flex; }
+
+  /* ── QUESTION phase ─────────────────────────────────── */
+  #q-context {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: clamp(18px, 3.8vw, 44px);
+    font-weight: 700; letter-spacing: -0.01em;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 36px; min-height: 1em;
+    text-align: center; white-space: nowrap;
+  }
+
+  #q-expression {
+    font-size: clamp(26px, 5.5vw, 60px);
+    font-weight: 800; letter-spacing: -0.01em; line-height: 1.15;
+    text-align: center; white-space: nowrap;
+  }
+
+  /* Operator slot for pick-the-operator mode */
+  .op-slot {
+    display: inline-block;
+    min-width: 1.6em; text-align: center;
+    border: 2px solid var(--yellow);
+    border-radius: 4px;
+    padding: 2px 10px;
+    color: rgba(255,233,77,0.3);
+    box-shadow: 0 0 12px rgba(255,233,77,0.15);
+    animation: slotPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes slotPulse {
+    0%,100% { box-shadow: 0 0 10px rgba(255,233,77,0.15); border-color: rgba(255,233,77,0.5); }
+    50%     { box-shadow: 0 0 22px rgba(255,233,77,0.4);  border-color: var(--yellow); }
+  }
+
+  /* Syntax colours */
+  .kw  { color: #ff79c6; }
+  .var { color: var(--blue); }
+  .op  { color: var(--yellow); }
+  .num { color: var(--orange); }
+  .bl  { color: var(--green); }   /* bool literal true */
+  .bf  { color: var(--red); }     /* bool literal false */
+  .res { color: rgba(255,255,255,0.45); font-size: 0.75em; }
+
+  /* Answer buttons */
+  .answer-row {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 16px; margin-top: 44px;
+  }
+
+  .ans-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 800;
+    font-size: clamp(16px, 3vw, 26px);
+    padding: 14px 36px;
+    border: 2px solid; border-radius: 4px;
+    background: transparent; cursor: pointer;
+    letter-spacing: 0.04em;
+    transition: all 0.18s;
+    position: relative; overflow: hidden;
+  }
+  .ans-btn::before {
+    content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity 0.18s;
+  }
+  .ans-btn:hover::before { opacity: 1; }
+  .ans-btn:active { transform: scale(0.95); }
+
+  /* true/false buttons */
+  .btn-true  { color: var(--green); border-color: var(--green); }
+  .btn-true::before  { background: rgba(0,255,136,0.07); }
+  .btn-true:hover  { box-shadow: 0 0 28px rgba(0,255,136,0.3); }
+  .btn-false { color: var(--red);   border-color: var(--red); }
+  .btn-false::before { background: rgba(255,60,90,0.07); }
+  .btn-false:hover { box-shadow: 0 0 28px rgba(255,60,90,0.3); }
+
+  /* operator buttons */
+  .btn-op { color: var(--yellow); border-color: rgba(255,233,77,0.4); font-size: clamp(14px, 2.5vw, 22px); padding: 12px 24px; }
+  .btn-op::before { background: rgba(255,233,77,0.06); }
+  .btn-op:hover { border-color: var(--yellow); box-shadow: 0 0 24px rgba(255,233,77,0.25); }
+
+  /* ── FEEDBACK phase ─────────────────────────────────── */
+  #fb-icon {
+    font-size: clamp(52px, 12vw, 96px); line-height: 1;
+    animation: popIn 0.4s cubic-bezier(0.16,1,0.3,1) forwards;
+  }
+  @keyframes popIn {
+    from { opacity:0; transform: scale(0.5); }
+    to   { opacity:1; transform: scale(1); }
+  }
+  #fb-label {
+    margin-top: 16px;
+    font-size: clamp(11px,2vw,14px); letter-spacing: 0.25em;
+    text-transform: uppercase; font-family: 'Share Tech Mono', monospace;
+  }
+  .fb-correct { color: var(--green); }
+  .fb-wrong   { color: var(--red); }
+
+  #fb-expression {
+    margin-top: 24px;
+    font-size: clamp(18px, 3.5vw, 38px);
+    font-weight: 700; text-align: center;
+  }
+  #fb-explanation {
+    margin-top: 14px;
+    font-size: clamp(11px,1.8vw,14px); color: rgba(255,255,255,0.3);
+    letter-spacing: 0.08em; font-family: 'Share Tech Mono', monospace;
+    text-align: center; max-width: 500px;
+  }
+
+  /* ── END phase ──────────────────────────────────────── */
+  #end-score {
+    font-size: clamp(60px,14vw,120px); font-weight: 800;
+    letter-spacing: -0.04em; line-height: 1;
+    animation: revealFinal 0.7s cubic-bezier(0.16,1,0.3,1) forwards;
+  }
+  @keyframes revealFinal {
+    from { opacity:0; transform: scale(0.6); filter: blur(16px); }
+    to   { opacity:1; transform: scale(1);   filter: blur(0); }
+  }
+  #end-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase;
+    color: rgba(255,255,255,0.2); margin-bottom: 12px;
+  }
+  #end-verdict {
+    margin-top: 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.3);
+  }
+  .play-again {
+    margin-top: 32px;
+    font-family: 'JetBrains Mono', monospace; font-weight: 700;
+    font-size: 13px; padding: 12px 32px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: transparent; color: rgba(255,255,255,0.35);
+    cursor: pointer; letter-spacing: 0.2em; text-transform: uppercase;
+    border-radius: 3px; transition: all 0.25s;
+  }
+  .play-again:hover { color:#fff; border-color:rgba(255,255,255,0.4); background:rgba(255,255,255,0.04); }
+
+  /* Slide animations */
+  @keyframes slideIn  { from{opacity:0;transform:translateY(20px);filter:blur(4px)} to{opacity:1;transform:translateY(0);filter:blur(0)} }
+  @keyframes slideOut { from{opacity:1;transform:translateY(0);filter:blur(0)} to{opacity:0;transform:translateY(-20px);filter:blur(4px)} }
+  .anim-in  { animation: slideIn  0.42s cubic-bezier(0.16,1,0.3,1) forwards; }
+  .anim-out { animation: slideOut 0.3s  cubic-bezier(0.4,0,1,1)    forwards; }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="corner tl"></div><div class="corner tr"></div>
+<div class="corner bl"></div><div class="corner br"></div>
+
+<div class="hud">
+  <span class="hud-q"  id="hudQ">Q 1 / 12</span>
+  <span>·</span>
+  <span class="hud-score" id="hudScore">SCORE 0</span>
+</div>
+
+<!-- Question phase -->
+<div class="phase" id="phase-question">
+  <div id="q-context"></div>
+  <div id="q-expression"></div>
+  <div class="answer-row" id="answer-row"></div>
+</div>
+
+<!-- Feedback phase -->
+<div class="phase" id="phase-feedback">
+  <div id="fb-icon"></div>
+  <div id="fb-label"></div>
+  <div id="fb-expression"></div>
+  <div id="fb-explanation"></div>
+</div>
+
+<!-- End phase -->
+<div class="phase" id="phase-end">
+  <div id="end-label">final score</div>
+  <div id="end-score"></div>
+  <div id="end-verdict"></div>
+  <button class="play-again" onclick="startGame()">▶ play again</button>
+</div>
+
+<div class="progress-bar" id="progressBar">
+  <div class="progress-fill" id="progressFill"></div>
+</div>
+
+<script>
+// ─── helpers ──────────────────────────────────────────────────────────────────
+const h = (tag, cls, inner) => { const e = document.createElement(tag); if (cls) e.className = cls; if (inner !== undefined) e.innerHTML = inner; return e; };
+const span = (cls, txt) => `<span class="${cls}">${txt}</span>`;
+const shuffle = a => { const b=[...a]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; };
+
+// ─── syntax helpers ───────────────────────────────────────────────────────────
+const VAR  = s  => span('var', s);
+const OP   = s  => span('op',  s);
+const NUM  = n  => span('num', n);
+const KW   = s  => span('kw',  s);
+const BOOL = b  => b ? span('bl','true') : span('bf','false');
+const SLOT =    () => `<span class="op op-slot">?</span>`;
+
+// ─── Question generators ──────────────────────────────────────────────────────
+// Each returns: { ctx, expr, ans, expl, mode:'tf'|'op', correctOp? }
+
+function rInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+// Build a "$a = x;  $b = y;" context line
+function varCtx(a, b) {
+  return `${VAR('$a')} ${OP('=')} ${typeof a === 'boolean' ? BOOL(a) : NUM(a)}${span('res',';')}&nbsp;&nbsp;&nbsp;${VAR('$b')} ${OP('=')} ${typeof b === 'boolean' ? BOOL(b) : NUM(b)}${span('res',';')}`;
+}
+
+// ── || questions ──
+function q_or_tf() {
+  const pairs = [[true,false],[false,false],[true,true],[false,true]];
+  const [a,b] = shuffle(pairs)[0];
+  const ans = a || b;
+  return { mode:'tf', ctx:varCtx(a,b), expr:`${VAR('$a')} ${OP('||')} ${VAR('$b')}`, ans, expl:`${a} || ${b} → ${ans}` };
+}
+function q_or_op() {
+  const pairs = [[true,false],[false,false],[true,true],[false,true]];
+  const [a,b] = shuffle(pairs)[0];
+  const res = a || b;
+  return { mode:'op', ctx:varCtx(a,b), expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`, correctOp:'||', ans:res, expl:`${a} || ${b} → ${res}` };
+}
+
+// ── && questions ──
+function q_and_tf() {
+  const pairs = [[true,true],[true,false],[false,false],[false,true]];
+  const [a,b] = shuffle(pairs)[0];
+  const ans = a && b;
+  return { mode:'tf', ctx:varCtx(a,b), expr:`${VAR('$a')} ${OP('&&')} ${VAR('$b')}`, ans:!!ans, expl:`${a} && ${b} → ${!!ans}` };
+}
+function q_and_op() {
+  const pairs = [[true,true],[true,false],[false,false],[false,true]];
+  const [a,b] = shuffle(pairs)[0];
+  const res = !!(a && b);
+  return { mode:'op', ctx:varCtx(a,b), expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`, correctOp:'&&', ans:res, expl:`${a} && ${b} → ${res}` };
+}
+
+// ── >= questions ──
+function q_gte_tf() {
+  const a = rInt(1,9), b = rInt(1,9);
+  const ans = a >= b;
+  return { mode:'tf', ctx:varCtx(a,b), expr:`${VAR('$a')} ${OP('>=')} ${VAR('$b')}`, ans, expl:`${a} >= ${b} → ${ans}` };
+}
+function q_gte_op() {
+  const a = rInt(1,9), b = rInt(1,9);
+  const res = a >= b;
+  return { mode:'op', ctx:varCtx(a,b), expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`, correctOp:'>=', ans:res, expl:`${a} >= ${b} → ${res}` };
+}
+
+// ── <= questions ──
+function q_lte_tf() {
+  const a = rInt(1,9), b = rInt(1,9);
+  const ans = a <= b;
+  return { mode:'tf', ctx:varCtx(a,b), expr:`${VAR('$a')} ${OP('<=')} ${VAR('$b')}`, ans, expl:`${a} <= ${b} → ${ans}` };
+}
+function q_lte_op() {
+  const a = rInt(1,9), b = rInt(1,9);
+  const res = a <= b;
+  return { mode:'op', ctx:varCtx(a,b), expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`, correctOp:'<=', ans:res, expl:`${a} <= ${b} → ${res}` };
+}
+
+// ── == questions ──
+function q_eq_tf() {
+  const variants = [
+    () => { const a=rInt(1,9);                          return { a, b:a,  ans:true  }; },
+    () => { const a=rInt(1,9); let b; do{b=rInt(1,9);}while(b===a); return { a, b, ans:false }; },
+    () => { const a=rInt(2,9);                          return { a, b:a,  ans:true  }; },
+  ];
+  const {a, b, ans} = shuffle(variants)[0]();
+  return { mode:'tf', ctx:varCtx(a,b), expr:`${VAR('$a')} ${OP('==')} ${VAR('$b')}`, ans, expl:`${a} == ${b} → ${ans}` };
+}
+function q_eq_op() {
+  const a = rInt(1,9), b = rInt(1,9);
+  const res = a == b;
+  return { mode:'op', ctx:varCtx(a,b), expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`, correctOp:'==', ans:res, expl:`${a} == ${b} → ${res}` };
+}
+
+// ── ! questions ──
+function q_not_tf() {
+  const a = Math.random() < 0.5;
+  const ans = !a;
+  return { mode:'tf', ctx:`${VAR('$a')} ${OP('=')} ${BOOL(a)}${span('res',';')}`, expr:`${OP('!')}${VAR('$a')}`, ans, expl:`!${a} → ${ans}` };
+}
+function q_not_op() {
+  const a = Math.random() < 0.5;
+  const res = !a;
+  return { mode:'op', ctx:`${VAR('$a')} ${OP('=')} ${BOOL(a)}${span('res',';')}`, expr:`${SLOT()}${VAR('$a')} ${span('res','==>')} ${BOOL(res)}`, correctOp:'!', ans:res, expl:`!${a} → ${res}` };
+}
+
+// ─── Question pool builder ────────────────────────────────────────────────────
+const OPERATORS = ['||','&&','>=','<=','==','!'];
+const TOTAL_Q = 10;
+
+function buildPool() {
+  const guaranteed = [
+    q_or_tf(),  q_or_op(),
+    q_and_tf(), q_and_op(),
+    q_gte_tf(), q_gte_op(),
+    q_lte_tf(), q_lte_op(),
+    q_eq_tf(),  q_eq_op(),
+    q_not_tf(), q_not_op(),
+  ];
+  return shuffle(guaranteed).slice(0, TOTAL_Q);
+}
+
+// ─── Operator choices for op-mode ─────────────────────────────────────────────
+function getOpChoices(correctOp) {
+  const others = shuffle(OPERATORS.filter(o => o !== correctOp)).slice(0, 3);
+  return shuffle([correctOp, ...others]);
+}
+
+// ─── Game state ───────────────────────────────────────────────────────────────
+let questions = [], qIndex = 0, score = 0, feedbackTimer = null;
+const FEEDBACK_DURATION = 2600;
+
+// ─── DOM refs ─────────────────────────────────────────────────────────────────
+const phaseQ   = document.getElementById('phase-question');
+const phaseFB  = document.getElementById('phase-feedback');
+const phaseEnd = document.getElementById('phase-end');
+const qCtx     = document.getElementById('q-context');
+const qExpr    = document.getElementById('q-expression');
+const ansRow   = document.getElementById('answer-row');
+const fbIcon   = document.getElementById('fb-icon');
+const fbLabel  = document.getElementById('fb-label');
+const fbExpr   = document.getElementById('fb-expression');
+const fbExpl   = document.getElementById('fb-explanation');
+const hudQ     = document.getElementById('hudQ');
+const hudScore = document.getElementById('hudScore');
+const endScore = document.getElementById('end-score');
+const endVerdict = document.getElementById('end-verdict');
+const progBar  = document.getElementById('progressBar');
+const progFill = document.getElementById('progressFill');
+
+function showPhase(name) {
+  [phaseQ, phaseFB, phaseEnd].forEach(p => p.classList.remove('active'));
+  document.getElementById('phase-' + name).classList.add('active');
+}
+
+function updateHUD() {
+  hudQ.textContent     = `Q ${qIndex+1} / ${TOTAL_Q}`;
+  hudScore.textContent = `SCORE ${score}`;
+}
+
+function startProgressBar(duration) {
+  progBar.classList.add('visible');
+  progFill.style.transition = 'none';
+  progFill.style.width = '0%';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    progFill.style.transition = `width ${duration}ms linear`;
+    progFill.style.width = '100%';
+  }));
+}
+
+// ─── Render question ──────────────────────────────────────────────────────────
+function renderQuestion() {
+  const q = questions[qIndex];
+  updateHUD();
+
+  qCtx.innerHTML  = q.ctx || '';
+  qExpr.innerHTML = q.expr;
+  qExpr.classList.remove('anim-in','anim-out');
+  void qExpr.offsetWidth;
+  qExpr.classList.add('anim-in');
+
+  ansRow.innerHTML = '';
+
+  if (q.mode === 'tf') {
+    const bt = document.createElement('button');
+    bt.className = 'ans-btn btn-true'; bt.textContent = 'true';
+    bt.onclick = () => submitAnswer(true, q);
+    const bf = document.createElement('button');
+    bf.className = 'ans-btn btn-false'; bf.textContent = 'false';
+    bf.onclick = () => submitAnswer(false, q);
+    ansRow.append(bt, bf);
+  } else {
+    // operator mode
+    const choices = getOpChoices(q.correctOp);
+    choices.forEach(op => {
+      const b = document.createElement('button');
+      b.className = 'ans-btn btn-op'; b.textContent = op;
+      b.onclick = () => submitAnswer(op, q);
+      ansRow.appendChild(b);
+    });
+  }
+
+  showPhase('question');
+  startProgressBar(15000); // generous time — no auto-advance, purely decorative
+}
+
+// ─── Submit answer ────────────────────────────────────────────────────────────
+function submitAnswer(given, q) {
+  clearTimeout(feedbackTimer);
+  progBar.classList.remove('visible');
+
+  const correct = (q.mode === 'tf') ? (given === q.ans) : (given === q.correctOp);
+  if (correct) score++;
+  updateHUD();
+
+  // Build feedback expression with operator revealed
+  let revealedExpr = q.expr.replace(
+    /<span class="op op-slot">.*?<\/span>/,
+    `<span class="op">${q.correctOp || ''}</span>`
+  );
+
+  fbIcon.textContent  = correct ? '✓' : '✗';
+  fbIcon.className    = correct ? 'fb-correct' : 'fb-wrong';
+  fbLabel.textContent = correct ? 'correct' : 'wrong';
+  fbLabel.className   = correct ? 'fb-correct' : 'fb-wrong';
+  fbExpr.innerHTML    = revealedExpr;
+  fbExpl.textContent  = q.expl;
+
+  showPhase('feedback');
+
+  feedbackTimer = setTimeout(() => {
+    qIndex++;
+    if (qIndex >= TOTAL_Q) { showEnd(); }
+    else { renderQuestion(); }
+  }, FEEDBACK_DURATION);
+}
+
+// ─── End ──────────────────────────────────────────────────────────────────────
+function showEnd() {
+  progBar.classList.remove('visible');
+  endScore.textContent = `${score} / ${TOTAL_Q}`;
+  endScore.style.color = score >= TOTAL_Q * 0.75 ? 'var(--green)' : score >= TOTAL_Q * 0.5 ? 'var(--yellow)' : 'var(--red)';
+  const msgs = [
+    [TOTAL_Q,     '— perfect! 🎉'],
+    [TOTAL_Q*.75, '— well done!'],
+    [TOTAL_Q*.5,  '— getting there'],
+    [0,           '— keep practising'],
+  ];
+  endVerdict.textContent = (msgs.find(([t]) => score >= t) || msgs[msgs.length-1])[1];
+  showPhase('end');
+}
+
+// ─── Start ────────────────────────────────────────────────────────────────────
+function startGame() {
+  clearTimeout(feedbackTimer);
+  questions = buildPool();
+  qIndex = 0; score = 0;
+  renderQuestion();
+}
+
+startGame();
+</script>
+</body>
+</html>
