@@ -218,8 +218,51 @@
   .go-title{font-size:clamp(40px,10vw,80px);font-weight:800;color:var(--red);text-shadow:0 0 40px rgba(255,60,90,0.5);letter-spacing:-0.02em}
   .go-sub{font-family:'Share Tech Mono',monospace;font-size:13px;letter-spacing:0.25em;color:rgba(255,255,255,0.3);text-transform:uppercase}
 
-  @keyframes slideIn{from{opacity:0;transform:translateY(20px);filter:blur(4px)}to{opacity:1;transform:translateY(0);filter:blur(0)}}
+  #github-link {
+    display: none; position: fixed; bottom: 28px; right: 32px;
+    font-family: 'Share Tech Mono', monospace; font-size: 11px;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: rgba(255,255,255,0.2); text-decoration: none;
+    transition: color 0.2s; z-index: 20;
+  }
+  #github-link:hover { color: rgba(255,255,255,0.6); }
   .anim-in{animation:slideIn 0.42s cubic-bezier(0.16,1,0.3,1) forwards}
+
+  #fb-back-btn, #q-continue-btn {
+    margin-top: 28px;
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px;
+    padding: 9px 24px;
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 3px;
+    background: transparent; color: rgba(255,255,255,0.35);
+    cursor: pointer; letter-spacing: 0.18em; text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  #fb-back-btn:hover, #q-continue-btn:hover {
+    color: #fff; border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.04);
+  }
+  .fb-nav { display: contents; }
+  #fb-back-btn {
+    position: fixed; bottom: 28px; left: 32px;
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px;
+    padding: 9px 24px;
+    border: 1px solid rgba(255,255,255,0.15); border-radius: 3px;
+    background: transparent; color: rgba(255,255,255,0.35);
+    cursor: pointer; letter-spacing: 0.18em; text-transform: uppercase;
+    transition: all 0.2s; z-index: 20; margin: 0;
+  }
+  #fb-back-btn:hover { color: #fff; border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.04); }
+  #fb-forward-btn {
+    position: fixed; bottom: 28px; right: 32px;
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:12px;
+    padding: 9px 24px;
+    border: 1px solid rgba(60,240,255,0.35); border-radius: 3px;
+    background: transparent; color: var(--blue);
+    cursor: pointer; letter-spacing: 0.18em; text-transform: uppercase;
+    transition: all 0.2s; z-index: 20;
+  }
+  #fb-forward-btn:hover { border-color: var(--blue); box-shadow: 0 0 20px rgba(60,240,255,0.2); background: rgba(60,240,255,0.05); }
+  #q-continue-btn { color: var(--blue); border-color: rgba(60,240,255,0.35); }
+  #q-continue-btn:hover { color: var(--blue); border-color: var(--blue); box-shadow: 0 0 20px rgba(60,240,255,0.2); background: rgba(60,240,255,0.05); }
 </style>
 </head>
 <body>
@@ -253,6 +296,7 @@
   <div id="q-context"></div>
   <div id="q-expression"></div>
   <div class="answer-row" id="answer-row"></div>
+  <button id="q-continue-btn" onclick="endReview()" style="display:none">continue →</button>
 </div>
 
 <!-- Feedback -->
@@ -261,6 +305,10 @@
   <div id="fb-label"></div>
   <div id="fb-expression"></div>
   <div id="fb-explanation"></div>
+  <div class="fb-nav">
+    <button id="fb-back-btn" onclick="reviewQuestion()">← review</button>
+    <button id="fb-forward-btn" onclick="advanceFromFeedback()">next →</button>
+  </div>
 </div>
 
 <!-- End -->
@@ -275,6 +323,8 @@
   <div id="end-scores"></div>
   <button class="play-again" onclick="startGame()">▶ play again</button>
 </div>
+
+<a id="github-link" href="https://github.com/meester-tom/operator-game" target="_blank">⌥ github</a>
 
 <!-- Game Over -->
 <div id="gameover">
@@ -359,7 +409,7 @@ function q_or_tf(){
 }
 function q_or_op(){
   const [a,b]=shuffle([[true,false],[false,false],[true,true],[false,true]])[0],res=a||b;
-  return{mode:'op',ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`,correctOp:'||',ans:res,expl:`${a} || ${b} → ${res}`};
+  return{mode:'op',a,b,ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`,correctOp:'||',ans:res,expl:`${a} || ${b} → ${res}`};
 }
 function q_and_tf(){
   const [a,b]=shuffle([[true,true],[true,false],[false,false],[false,true]])[0];
@@ -367,20 +417,20 @@ function q_and_tf(){
 }
 function q_and_op(){
   const [a,b]=shuffle([[true,true],[true,false],[false,false],[false,true]])[0],res=!!(a&&b);
-  return{mode:'op',ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`,correctOp:'&&',ans:res,expl:`${a} && ${b} → ${res}`};
+  return{mode:'op',a,b,ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(res)}`,correctOp:'&&',ans:res,expl:`${a} && ${b} → ${res}`};
 }
 function q_gte_tf(){const a=rInt(1,9),b=rInt(1,9);return{mode:'tf',ctx:varCtx(a,b),expr:`${VAR('$a')} ${OP('>=')} ${VAR('$b')}`,ans:a>=b,expl:`${a} >= ${b} → ${a>=b}`};}
-function q_gte_op(){const a=rInt(1,9),b=rInt(1,9),r=a>=b;return{mode:'op',ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'>=',ans:r,expl:`${a} >= ${b} → ${r}`};}
+function q_gte_op(){const a=rInt(1,9),b=rInt(1,9),r=a>=b;return{mode:'op',a,b,ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'>=',ans:r,expl:`${a} >= ${b} → ${r}`};}
 function q_lte_tf(){const a=rInt(1,9),b=rInt(1,9);return{mode:'tf',ctx:varCtx(a,b),expr:`${VAR('$a')} ${OP('<=')} ${VAR('$b')}`,ans:a<=b,expl:`${a} <= ${b} → ${a<=b}`};}
-function q_lte_op(){const a=rInt(1,9),b=rInt(1,9),r=a<=b;return{mode:'op',ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'<=',ans:r,expl:`${a} <= ${b} → ${r}`};}
+function q_lte_op(){const a=rInt(1,9),b=rInt(1,9),r=a<=b;return{mode:'op',a,b,ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'<=',ans:r,expl:`${a} <= ${b} → ${r}`};}
 function q_eq_tf(){
   const pick=Math.random()<0.5;
   const a=rInt(1,9),b=pick?a:(()=>{let x;do{x=rInt(1,9);}while(x===a);return x;})();
   return{mode:'tf',ctx:varCtx(a,b),expr:`${VAR('$a')} ${OP('==')} ${VAR('$b')}`,ans:a==b,expl:`${a} == ${b} → ${a==b}`};
 }
-function q_eq_op(){const a=rInt(1,9),b=rInt(1,9),r=a==b;return{mode:'op',ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'==',ans:r,expl:`${a} == ${b} → ${r}`};}
+function q_eq_op(){const a=rInt(1,9),b=rInt(1,9),r=a==b;return{mode:'op',a,b,ctx:varCtx(a,b),expr:`${VAR('$a')} ${SLOT()} ${VAR('$b')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'==',ans:r,expl:`${a} == ${b} → ${r}`};}
 function q_not_tf(){const a=Math.random()<0.5;return{mode:'tf',ctx:`${VAR('$a')} ${OP('=')} ${BOOL(a)}${span('res',';')}`,expr:`${OP('!')}${VAR('$a')}`,ans:!a,expl:`!${a} → ${!a}`};}
-function q_not_op(){const a=Math.random()<0.5,r=!a;return{mode:'op',ctx:`${VAR('$a')} ${OP('=')} ${BOOL(a)}${span('res',';')}`,expr:`${SLOT()}${VAR('$a')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'!',ans:r,expl:`!${a} → ${r}`};}
+function q_not_op(){const a=Math.random()<0.5,r=!a;return{mode:'op',a,b:undefined,ctx:`${VAR('$a')} ${OP('=')} ${BOOL(a)}${span('res',';')}`,expr:`${SLOT()}${VAR('$a')} ${span('res','==>')} ${BOOL(r)}`,correctOp:'!',ans:r,expl:`!${a} → ${r}`};}
 
 const OPERATORS=['||','&&','>=','<=','==','!'];
 const TOTAL_Q=10, MAX_LIVES=3;
@@ -396,7 +446,7 @@ const LEVELS=[
 function getLevel(pts){let l=LEVELS[0];for(const x of LEVELS)if(pts>=x.min)l=x;return l;}
 
 // ─── High scores ──────────────────────────────────────────────────────────────
-let highScores=[], pendingScore=null;
+let highScores=JSON.parse(localStorage.getItem('operatorGameScores')||'[]'), pendingScore=null;
 
 function saveScore(){
   const name=(document.getElementById('name-input').value.trim().toUpperCase()||'ANON').slice(0,10);
@@ -404,6 +454,7 @@ function saveScore(){
   highScores.push({name,score:pendingScore});
   highScores.sort((a,b)=>b.score-a.score);
   highScores=highScores.slice(0,8);
+  localStorage.setItem('operatorGameScores', JSON.stringify(highScores));
   pendingScore=null;
   document.getElementById('name-entry').style.display='none';
   renderScoreTable(name);
@@ -436,6 +487,11 @@ const phaseQ=$('phase-question'),phaseFB=$('phase-feedback'),phaseEnd=$('phase-e
 function showPhase(n){
   [phaseQ,phaseFB,phaseEnd].forEach(p=>p.classList.remove('active'));
   $('phase-'+n).classList.add('active');
+  const onFeedback = n==='feedback';
+  $('fb-forward-btn').style.display = onFeedback ? 'block' : 'none';
+  // fb-back-btn visibility is controlled separately (only on wrong answers)
+  if(!onFeedback) $('fb-back-btn').style.display = 'none';
+  $('github-link').style.display = n==='end' ? 'block' : 'none';
 }
 
 function updateHUD(){
@@ -498,9 +554,20 @@ function renderQuestion(){
 }
 
 // ─── Answer ───────────────────────────────────────────────────────────────────
+function evalOp(op, a, b){
+  switch(op){
+    case '||': return a||b;
+    case '&&': return !!(a&&b);
+    case '>=': return a>=b;
+    case '<=': return a<=b;
+    case '==': return a==b;
+    case '!':  return !a;
+  }
+}
+
 function submitAnswer(given,q){
   clearTimeout(fbTimer); $('progressBar').classList.remove('visible');
-  const correct=q.mode==='tf'?given===q.ans:given===q.correctOp;
+  const correct=q.mode==='tf'?given===q.ans:evalOp(given,q.a,q.b)===q.ans;
 
   if(correct){
     const bonus=streak>=4?15:streak>=2?12:10;
@@ -516,18 +583,57 @@ function submitAnswer(given,q){
   updateHUD();
 
   const revealed=q.expr.replace(/<span class="op op-slot">.*?<\/span>/,`<span class="op">${q.correctOp||''}</span>`);
+  q.revealed=revealed;
   $('fb-icon').textContent=correct?'✓':'✗';
   $('fb-icon').className=correct?'fb-correct':'fb-wrong';
   $('fb-label').textContent=correct?'correct':'wrong';
   $('fb-label').className=correct?'fb-correct':'fb-wrong';
   $('fb-expression').innerHTML=revealed;
   $('fb-explanation').textContent=q.expl;
+  $('fb-back-btn').style.display = correct ? 'none' : 'inline-block';
   showPhase('feedback');
+}
 
-  fbTimer=setTimeout(()=>{
-    if(lives<=0){triggerGameOver();return;}
-    qIndex++; if(qIndex>=TOTAL_Q)showEnd(); else renderQuestion();
-  },2400);
+function advanceFromFeedback(){
+  if(lives<=0){triggerGameOver();return;}
+  qIndex++; if(qIndex>=TOTAL_Q) showEnd(); else renderQuestion();
+}
+
+// ─── Review mode ──────────────────────────────────────────────────────────────
+let reviewPending = false;
+
+function reviewQuestion(){
+  clearTimeout(fbTimer);
+  reviewPending = true;
+  const q = questions[qIndex];
+  // Re-render the question but with buttons disabled
+  $('q-context').innerHTML = q.ctx || '';
+  const qe = $('q-expression'); qe.innerHTML = q.revealed || q.expr;
+  qe.classList.remove('anim-in'); void qe.offsetWidth; qe.classList.add('anim-in');
+  const ar = $('answer-row'); ar.innerHTML = '';
+  if(q.mode === 'tf'){
+    ['true','false'].forEach(v => {
+      const b = document.createElement('button');
+      b.className = `ans-btn btn-${v}`; b.textContent = v;
+      b.disabled = true; b.style.opacity = '0.3'; b.style.cursor = 'default';
+      ar.appendChild(b);
+    });
+  } else {
+    getOpChoices(q.correctOp).forEach(op => {
+      const b = document.createElement('button');
+      b.className = 'ans-btn btn-op'; b.textContent = op;
+      b.disabled = true; b.style.opacity = '0.3'; b.style.cursor = 'default';
+      ar.appendChild(b);
+    });
+  }
+  $('q-continue-btn').style.display = 'inline-block';
+  showPhase('question');
+}
+
+function endReview(){
+  reviewPending = false;
+  $('q-continue-btn').style.display = 'none';
+  showPhase('feedback');
 }
 
 function triggerGameOver(){
@@ -561,6 +667,13 @@ function startGame(){
 }
 
 startGame();
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'ArrowRight'){
+    const btn = $('fb-forward-btn');
+    if(btn && btn.style.display !== 'none') advanceFromFeedback();
+  }
+});
 </script>
 </body>
 </html>
